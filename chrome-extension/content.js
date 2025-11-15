@@ -75,15 +75,23 @@ function getTeamColor(playerNum) {
   return playerNum % 2 === 1 ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
 }
 
-// Update document title with scores
+// Track previous scores to only update title when score changes
+let previousRedScore = null;
+let previousBlueScore = null;
+
+// Update document title with scores (only when score changes)
 function updateTitle() {
   if (!gameState.teamScores) return;
 
   const redScore = gameState.teamScores.red || 0;
   const blueScore = gameState.teamScores.blue || 0;
 
-  // Just show score
-  document.title = `${redScore}:${blueScore}`;
+  // Only update if score changed
+  if (redScore !== previousRedScore || blueScore !== previousBlueScore) {
+    document.title = `${redScore}:${blueScore}`;
+    previousRedScore = redScore;
+    previousBlueScore = blueScore;
+  }
 }
 
 // Score flash tracking (kept for compatibility but not actively used)
@@ -135,44 +143,40 @@ function updateFavicon() {
   const ballInMyArea = gameState.ballX >= faviconStartX && gameState.ballX < faviconEndX;
 
   // Left warning line (ball coming from left)
-  // For player 1, show warning when ball is approaching from right (within their area)
-  // For other players, show warning when ball is approaching from left (outside their area)
-  const leftEdgeX = faviconStartX;
-  const distanceFromLeftEdge = gameState.ballX - leftEdgeX;
-  const showLeftWarning = currentNumber === 1 
-    ? (ballInMyArea && gameState.ballVelX < 0 && distanceFromLeftEdge <= maxWarningDistance)
-    : (distanceFromLeftEdge >= -maxWarningDistance && distanceFromLeftEdge <= maxWarningDistance && gameState.ballVelX > 0);
-  
-  if (showLeftWarning) {
-    const distance = Math.abs(distanceFromLeftEdge);
-    const intensity = Math.max(0, 1 - distance / maxWarningDistance);
-    const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
-    const opacity = intensity;
+  // Player 1 (leftmost) should NOT see left warning - ball can't come from left
+  // Other players see warning when ball is approaching from left (outside their area)
+  if (currentNumber !== 1) {
+    const leftEdgeX = faviconStartX;
+    const distanceFromLeftEdge = gameState.ballX - leftEdgeX;
+    if (distanceFromLeftEdge >= -maxWarningDistance && distanceFromLeftEdge <= maxWarningDistance && gameState.ballVelX > 0) {
+      const distance = Math.abs(distanceFromLeftEdge);
+      const intensity = Math.max(0, 1 - distance / maxWarningDistance);
+      const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
+      const opacity = intensity;
 
-    if (lineHeight > 0) {
-      ctx.fillStyle = `${WARNING_LINE_COLOR}${opacity})`;
-      ctx.fillRect(0, (CANVAS_HEIGHT - lineHeight) / 2, 1, lineHeight);
+      if (lineHeight > 0) {
+        ctx.fillStyle = `${WARNING_LINE_COLOR}${opacity})`;
+        ctx.fillRect(0, (CANVAS_HEIGHT - lineHeight) / 2, 1, lineHeight);
+      }
     }
   }
 
   // Right warning line (ball coming from right)
-  // For last player, show warning when ball is approaching from left (within their area)
-  // For other players, show warning when ball is approaching from right (outside their area)
-  const rightEdgeX = faviconEndX;
-  const distanceFromRightEdge = rightEdgeX - gameState.ballX;
-  const showRightWarning = currentNumber === totalPlayers
-    ? (ballInMyArea && gameState.ballVelX > 0 && distanceFromRightEdge <= maxWarningDistance)
-    : (distanceFromRightEdge >= -maxWarningDistance && distanceFromRightEdge <= maxWarningDistance && gameState.ballVelX < 0);
-  
-  if (showRightWarning) {
-    const distance = Math.abs(distanceFromRightEdge);
-    const intensity = Math.max(0, 1 - distance / maxWarningDistance);
-    const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
-    const opacity = intensity;
+  // Last player (rightmost) should NOT see right warning - ball can't come from right
+  // Other players see warning when ball is approaching from right (outside their area)
+  if (currentNumber !== totalPlayers) {
+    const rightEdgeX = faviconEndX;
+    const distanceFromRightEdge = rightEdgeX - gameState.ballX;
+    if (distanceFromRightEdge >= -maxWarningDistance && distanceFromRightEdge <= maxWarningDistance && gameState.ballVelX < 0) {
+      const distance = Math.abs(distanceFromRightEdge);
+      const intensity = Math.max(0, 1 - distance / maxWarningDistance);
+      const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
+      const opacity = intensity;
 
-    if (lineHeight > 0) {
-      ctx.fillStyle = `${WARNING_LINE_COLOR}${opacity})`;
-      ctx.fillRect(CANVAS_WIDTH - 1, (CANVAS_HEIGHT - lineHeight) / 2, 1, lineHeight);
+      if (lineHeight > 0) {
+        ctx.fillStyle = `${WARNING_LINE_COLOR}${opacity})`;
+        ctx.fillRect(CANVAS_WIDTH - 1, (CANVAS_HEIGHT - lineHeight) / 2, 1, lineHeight);
+      }
     }
   }
 
