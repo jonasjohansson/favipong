@@ -190,7 +190,19 @@ function broadcastGameState() {
 
 // Handle paddle collision and scoring
 function handlePaddleCollision(playerNumber) {
-  const team = getTeam(playerNumber);
+  // Find the WebSocket for this player number to get their persistent team
+  let team = null;
+  clients.forEach((pNum, ws) => {
+    if (pNum === playerNumber && ws.readyState === WebSocket.OPEN) {
+      team = clientTeams.get(ws) || TEAM_RED;
+    }
+  });
+  
+  if (!team) {
+    // Fallback to old method if team not found
+    team = getTeam(playerNumber);
+  }
+  
   teamScores[team]++;
   lastScoringTeam = team;
   scoreFlashFrames = SCORE_FLASH_DURATION;
@@ -392,6 +404,7 @@ wss.on("connection", (ws) => {
         paddlePositions.delete(playerNumber);
       }
       clients.delete(ws);
+      clientTeams.delete(ws);
       reassignNumbers();
     }
   });
