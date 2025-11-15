@@ -63,16 +63,16 @@ let scoreFlashFrames = 0;
 // Paddle movement keys
 const keys = {};
 
-// Get team color for current player
-function getTeamColor(playerNum) {
-  // Use persistent team if available, otherwise fallback to number-based
+// Get team color for current player (always use persistent team)
+function getTeamColor() {
+  // Always use currentTeam - should be set by server
   if (currentTeam === "red") {
     return TEAM_RED_COLOR;
   } else if (currentTeam === "blue") {
     return TEAM_BLUE_COLOR;
   }
-  // Fallback
-  return playerNum % 2 === 1 ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
+  // Fallback only if team not set yet
+  return TEAM_RED_COLOR;
 }
 
 // Track previous scores to only update title when score changes
@@ -139,43 +139,51 @@ function updateFavicon() {
   const faviconStartX = (currentNumber - 1) * CANVAS_WIDTH;
   const faviconEndX = currentNumber * CANVAS_WIDTH;
   const worldWidth = CANVAS_WIDTH * totalPlayers;
-  const maxWarningDistance = CANVAS_WIDTH * WARNING_DISTANCE_MULTIPLIER;
+  // Scale warning distance with number of players (more players = longer warning range)
+  const maxWarningDistance = CANVAS_WIDTH * WARNING_DISTANCE_MULTIPLIER * totalPlayers;
   const ballInMyArea = gameState.ballX >= faviconStartX && gameState.ballX < faviconEndX;
 
-  // Left warning line (ball coming from left)
-  // Player 1 (leftmost) should NOT see left warning - ball can't come from left
-  // Other players see warning when ball is approaching from left (outside their area)
+  // Warning indicator: small paddle (same size as ball) showing where ball will come from
+  // Left indicator (ball coming from left)
+  // Player 1 (leftmost) should NOT see left indicator - ball can't come from left
   if (currentNumber !== 1) {
     const leftEdgeX = faviconStartX;
     const distanceFromLeftEdge = gameState.ballX - leftEdgeX;
     if (distanceFromLeftEdge >= -maxWarningDistance && distanceFromLeftEdge <= maxWarningDistance && gameState.ballVelX > 0) {
+      // Show indicator at predicted Y position where ball will hit
+      const indicatorY = Math.floor(gameState.ballY);
       const distance = Math.abs(distanceFromLeftEdge);
+      // Closer = more opaque (1.0 when very close, 0.0 when far)
       const intensity = Math.max(0, 1 - distance / maxWarningDistance);
-      const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
-      const opacity = intensity;
+      const opacity = intensity; // Range from 0.0 to 1.0
 
-      if (lineHeight > 0) {
-        ctx.fillStyle = `${WARNING_LINE_COLOR}${opacity})`;
-        ctx.fillRect(0, (CANVAS_HEIGHT - lineHeight) / 2, 1, lineHeight);
+      if (intensity > 0 && indicatorY >= 0 && indicatorY < CANVAS_HEIGHT) {
+        ctx.fillStyle = "#FFFFFF"; // White
+        ctx.globalAlpha = opacity;
+        ctx.fillRect(0, indicatorY, 1, 1); // Same size as ball (1x1)
+        ctx.globalAlpha = 1;
       }
     }
   }
 
-  // Right warning line (ball coming from right)
-  // Last player (rightmost) should NOT see right warning - ball can't come from right
-  // Other players see warning when ball is approaching from right (outside their area)
+  // Right indicator (ball coming from right)
+  // Last player (rightmost) should NOT see right indicator - ball can't come from right
   if (currentNumber !== totalPlayers) {
     const rightEdgeX = faviconEndX;
     const distanceFromRightEdge = rightEdgeX - gameState.ballX;
     if (distanceFromRightEdge >= -maxWarningDistance && distanceFromRightEdge <= maxWarningDistance && gameState.ballVelX < 0) {
+      // Show indicator at predicted Y position where ball will hit
+      const indicatorY = Math.floor(gameState.ballY);
       const distance = Math.abs(distanceFromRightEdge);
+      // Closer = more opaque (1.0 when very close, 0.0 when far)
       const intensity = Math.max(0, 1 - distance / maxWarningDistance);
-      const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
-      const opacity = intensity;
+      const opacity = intensity; // Range from 0.0 to 1.0
 
-      if (lineHeight > 0) {
-        ctx.fillStyle = `${WARNING_LINE_COLOR}${opacity})`;
-        ctx.fillRect(CANVAS_WIDTH - 1, (CANVAS_HEIGHT - lineHeight) / 2, 1, lineHeight);
+      if (intensity > 0 && indicatorY >= 0 && indicatorY < CANVAS_HEIGHT) {
+        ctx.fillStyle = "#FFFFFF"; // White
+        ctx.globalAlpha = opacity;
+        ctx.fillRect(CANVAS_WIDTH - 1, indicatorY, 1, 1); // Same size as ball (1x1)
+        ctx.globalAlpha = 1;
       }
     }
   }
@@ -187,21 +195,21 @@ function updateFavicon() {
     ctx.fillRect(Math.floor(localBallX), Math.floor(gameState.ballY), 1, 1);
   }
 
-  // Draw paddles based on player number with team colors
+  // Draw ONLY the current player's paddle with their team color
   if (currentNumber === 1) {
     // Player 1: Left paddle (vertical) at left edge
-    const paddleY = gameState.paddlePositions[1] || CENTER_Y;
-    ctx.fillStyle = getTeamColor(1);
+    const paddleY = gameState.paddlePositions[currentNumber] || CENTER_Y;
+    ctx.fillStyle = getTeamColor();
     ctx.fillRect(0, paddleY - PADDLE_SIZE, PADDLE_WIDTH, PADDLE_SIZE * 2);
   } else if (currentNumber === totalPlayers && totalPlayers > 1) {
     // Last player: Right paddle (vertical) at right edge
-    const paddleY = gameState.paddlePositions[totalPlayers] || CENTER_Y;
-    ctx.fillStyle = getTeamColor(totalPlayers);
+    const paddleY = gameState.paddlePositions[currentNumber] || CENTER_Y;
+    ctx.fillStyle = getTeamColor();
     ctx.fillRect(CANVAS_WIDTH - 1, paddleY - PADDLE_SIZE, PADDLE_WIDTH, PADDLE_SIZE * 2);
   } else if (currentNumber > 1 && currentNumber < totalPlayers) {
     // Middle players: Top and bottom paddles (horizontal)
     const paddleX = gameState.paddlePositions[currentNumber] || CENTER_Y;
-    const teamColor = getTeamColor(currentNumber);
+    const teamColor = getTeamColor();
 
     // Top paddle
     ctx.fillStyle = teamColor;

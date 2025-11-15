@@ -258,11 +258,12 @@ function gameLoop() {
   }
 
   // Left paddle (player 1)
-  if (gameState.ballX <= PADDLE_SIZE + 1 && gameState.ballVelX < 0) {
+  // Paddle is at x=0, so collision happens when ball reaches x=0 or x=1
+  if (gameState.ballX <= 1 && gameState.ballVelX < 0) {
     const paddleY = paddlePositions.get(1);
     if (paddleY !== undefined && checkPaddleCollision(1, 0, paddleY, true)) {
       gameState.ballVelX = Math.abs(gameState.ballVelX);
-      gameState.ballX = PADDLE_SIZE + 1;
+      gameState.ballX = 1; // Position ball just to the right of paddle
       if (!scoredThisFrame) {
         handlePaddleCollision(1);
         scoredThisFrame = true;
@@ -271,13 +272,14 @@ function gameLoop() {
   }
 
   // Right paddle (last player)
+  // Paddle is at x=worldWidth-1, so collision happens when ball reaches x=worldWidth-1 or x=worldWidth-2
   const lastPlayer = totalPlayers;
-  const rightPaddleX = worldWidth - PADDLE_SIZE - 1;
-  if (gameState.ballX >= rightPaddleX && gameState.ballVelX > 0) {
+  const rightPaddleX = worldWidth - 1;
+  if (gameState.ballX >= rightPaddleX - 1 && gameState.ballVelX > 0) {
     const paddleY = paddlePositions.get(lastPlayer);
     if (paddleY !== undefined && checkPaddleCollision(lastPlayer, rightPaddleX, paddleY, true)) {
       gameState.ballVelX = -Math.abs(gameState.ballVelX);
-      gameState.ballX = rightPaddleX;
+      gameState.ballX = rightPaddleX - 1; // Position ball just to the left of paddle
       if (!scoredThisFrame) {
         handlePaddleCollision(lastPlayer);
         scoredThisFrame = true;
