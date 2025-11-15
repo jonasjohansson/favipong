@@ -15,8 +15,8 @@ const CENTER_X = FAVICON_WIDTH / 2;
 const CENTER_Y = FAVICON_HEIGHT / 2;
 
 // Ball settings
-const BALL_VELOCITY_X = 0.25; // Slower ball
-const BALL_VELOCITY_Y = 0.25;
+const BALL_VELOCITY_X = 0.15; // Slower ball
+const BALL_VELOCITY_Y = 0.15;
 const BALL_RADIUS = 0.5; // Single pixel ball
 
 // Paddle settings

@@ -12,7 +12,7 @@ const WS_URL = (() => {
 })();
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_BASE = 2000; // ms
-const PADDLE_MOVE_INTERVAL = 16; // ms (~60 FPS)
+const PADDLE_MOVE_INTERVAL = 50; // ms (slower paddle movement)
 
 // Canvas settings
 const CANVAS_WIDTH = 16;
@@ -51,7 +51,7 @@ let reconnectAttempts = 0;
 let gameState = {
   ballX: CENTER_X,
   ballY: CENTER_Y,
-  ballVelX: 0.25,
+  ballVelX: 0.15,
   paddlePositions: {},
   teamScores: { red: 0, blue: 0 },
   lastScoringTeam: null,
@@ -143,11 +143,18 @@ function updateFavicon() {
   const faviconEndX = currentNumber * CANVAS_WIDTH;
   const worldWidth = CANVAS_WIDTH * totalPlayers;
   const maxWarningDistance = CANVAS_WIDTH * WARNING_DISTANCE_MULTIPLIER;
+  const ballInMyArea = gameState.ballX >= faviconStartX && gameState.ballX < faviconEndX;
 
   // Left warning line (ball coming from left)
+  // For player 1, show warning when ball is approaching from right (within their area)
+  // For other players, show warning when ball is approaching from left (outside their area)
   const leftEdgeX = faviconStartX;
   const distanceFromLeftEdge = gameState.ballX - leftEdgeX;
-  if (distanceFromLeftEdge >= -maxWarningDistance && distanceFromLeftEdge <= maxWarningDistance && gameState.ballVelX > 0) {
+  const showLeftWarning = currentNumber === 1 
+    ? (ballInMyArea && gameState.ballVelX < 0 && distanceFromLeftEdge <= maxWarningDistance)
+    : (distanceFromLeftEdge >= -maxWarningDistance && distanceFromLeftEdge <= maxWarningDistance && gameState.ballVelX > 0);
+  
+  if (showLeftWarning) {
     const distance = Math.abs(distanceFromLeftEdge);
     const intensity = Math.max(0, 1 - distance / maxWarningDistance);
     const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
@@ -160,9 +167,15 @@ function updateFavicon() {
   }
 
   // Right warning line (ball coming from right)
+  // For last player, show warning when ball is approaching from left (within their area)
+  // For other players, show warning when ball is approaching from right (outside their area)
   const rightEdgeX = faviconEndX;
   const distanceFromRightEdge = rightEdgeX - gameState.ballX;
-  if (distanceFromRightEdge >= -maxWarningDistance && distanceFromRightEdge <= maxWarningDistance && gameState.ballVelX < 0) {
+  const showRightWarning = currentNumber === totalPlayers
+    ? (ballInMyArea && gameState.ballVelX > 0 && distanceFromRightEdge <= maxWarningDistance)
+    : (distanceFromRightEdge >= -maxWarningDistance && distanceFromRightEdge <= maxWarningDistance && gameState.ballVelX < 0);
+  
+  if (showRightWarning) {
     const distance = Math.abs(distanceFromRightEdge);
     const intensity = Math.max(0, 1 - distance / maxWarningDistance);
     const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
@@ -257,7 +270,7 @@ function connectWebSocket() {
         } else if (message.type === "gameState") {
           gameState.ballX = message.ballX || CENTER_X;
           gameState.ballY = message.ballY || CENTER_Y;
-          gameState.ballVelX = message.ballVelX || 0.25;
+          gameState.ballVelX = message.ballVelX || 0.15;
           gameState.paddlePositions = message.paddlePositions || {};
           gameState.teamScores = message.teamScores || { red: 0, blue: 0 };
           gameState.lastScoringTeam = message.lastScoringTeam || null;

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Favipong - WebSocket Game</title>
+  <title>Favipong</title>
   <style>
     * {
       margin: 0;
@@ -12,139 +12,39 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       background: #000;
-      color: #fff;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-
-    .container {
-      text-align: center;
-      max-width: 1200px;
-      width: 100%;
-    }
-
-    h1 {
-      margin-bottom: 20px;
-      font-size: 2.5em;
-    }
-
-    .status {
-      margin-bottom: 20px;
-      font-size: 1.2em;
-      opacity: 0.8;
-    }
-
-    .game-canvas-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      margin: 20px 0;
-      background: #111;
-      border: 2px solid #333;
-      border-radius: 8px;
-      padding: 20px;
     }
 
     #gameCanvas {
       image-rendering: pixelated;
       image-rendering: crisp-edges;
-      max-width: 100%;
-      height: auto;
-    }
-
-    .controls {
-      margin-top: 20px;
-      font-size: 0.9em;
-      opacity: 0.7;
-    }
-
-    .team-info {
-      display: flex;
-      justify-content: center;
-      gap: 40px;
-      margin-top: 20px;
-      font-size: 1.1em;
-    }
-
-    .team {
-      padding: 10px 20px;
-      border-radius: 4px;
-    }
-
-    .team-red {
-      color: #ff4444;
-    }
-
-    .team-blue {
-      color: #4444ff;
-    }
-
-    .connection-status {
-      margin-top: 20px;
-      padding: 10px;
-      border-radius: 4px;
-      font-size: 0.9em;
-    }
-
-    .connected {
-      background: rgba(0, 255, 0, 0.2);
-      color: #0f0;
-    }
-
-    .disconnected {
-      background: rgba(255, 0, 0, 0.2);
-      color: #f00;
+      width: 100vw;
+      height: 100vh;
+      object-fit: fill;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🎮 Favipong</h1>
-    <div id="status" class="status">Connecting...</div>
-    
-    <div class="game-canvas-container">
-      <canvas id="gameCanvas" width="16" height="16"></canvas>
-    </div>
-
-    <div class="team-info">
-      <div class="team team-red">
-        <strong>Red Team:</strong> <span id="redScore">0</span>
-      </div>
-      <div class="team team-blue">
-        <strong>Blue Team:</strong> <span id="blueScore">0</span>
-      </div>
-    </div>
-
-    <div id="connectionStatus" class="connection-status disconnected">
-      Disconnected
-    </div>
-
-    <div class="controls">
-      <p>Use arrow keys or WASD to control your paddle</p>
-      <p id="playerInfo">Waiting for assignment...</p>
-    </div>
-  </div>
+  <canvas id="gameCanvas" width="16" height="16"></canvas>
 
   <script>
     // ========== CONFIGURATION ==========
     // WebSocket URL - defaults to production URL
     const WS_URL = (() => {
-      // Check localStorage first (for runtime configuration/override)
       if (typeof localStorage !== "undefined" && localStorage.getItem("wsUrl")) {
         return localStorage.getItem("wsUrl");
       }
-      // Default to production Render.com URL
       return "wss://favipong.onrender.com";
     })();
     const MAX_RECONNECT_ATTEMPTS = 5;
     const RECONNECT_DELAY_BASE = 2000; // ms
-    const PADDLE_MOVE_INTERVAL = 16; // ms (~60 FPS)
+    const PADDLE_MOVE_INTERVAL = 50; // ms (slower paddle movement)
 
     // Canvas settings
     const CANVAS_WIDTH = 16;
@@ -166,6 +66,7 @@
     const PADDLE_SIZE = 2;
     const PADDLE_WIDTH = 1; // For vertical paddles
     const PADDLE_HEIGHT = 1; // For horizontal paddles
+    const PADDLE_COLLISION_TOLERANCE = 2;
 
     // Warning line settings
     const WARNING_DISTANCE_MULTIPLIER = 2; // Show warning within 2 favicons
@@ -178,20 +79,24 @@
     let ws = null;
     let reconnectAttempts = 0;
 
-    // Game state from server
-    let gameState = {
-      ballX: CENTER_X,
-      ballY: CENTER_Y,
-      ballVelX: 0.25,
-      paddlePositions: {},
-      teamScores: { red: 0, blue: 0 },
-      lastScoringTeam: null,
-    };
+  // Game state from server
+  let gameState = {
+    ballX: CENTER_X,
+    ballY: CENTER_Y,
+    ballVelX: 0.15,
+    paddlePositions: {},
+    teamScores: { red: 0, blue: 0 },
+    lastScoringTeam: null,
+  };
 
     // Score flash state
     let scoreFlashFrames = 0;
-    let previousRedScore = 0;
-    let previousBlueScore = 0;
+    let flashColor = null; // 'green' or 'red'
+    let previousBallX = null;
+    let previousBallY = null;
+    let previousBallVelX = null;
+    let previousBallVelY = null;
+    let ballWasInMyArea = false;
 
     // Paddle movement keys
     const keys = {};
@@ -205,58 +110,9 @@
     const gameCanvas = document.getElementById("gameCanvas");
     const gameCtx = gameCanvas.getContext("2d");
 
-    // Scale canvas to fill available space while maintaining aspect ratio
-    function resizeCanvas() {
-      const container = gameCanvas.parentElement;
-      const maxWidth = container.clientWidth - 40; // padding
-      const maxHeight = window.innerHeight * 0.6;
-      
-      const scale = Math.min(
-        Math.floor(maxWidth / CANVAS_WIDTH),
-        Math.floor(maxHeight / CANVAS_HEIGHT)
-      );
-      
-      // Ensure minimum scale of 20x
-      const finalScale = Math.max(20, scale);
-      
-      gameCanvas.style.width = `${CANVAS_WIDTH * finalScale}px`;
-      gameCanvas.style.height = `${CANVAS_HEIGHT * finalScale}px`;
-    }
-
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
     // Get team color for a player number
     function getTeamColor(playerNum) {
       return playerNum % 2 === 1 ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
-    }
-
-    // Update UI elements
-    function updateUI() {
-      const statusEl = document.getElementById("status");
-      const playerInfoEl = document.getElementById("playerInfo");
-      const redScoreEl = document.getElementById("redScore");
-      const blueScoreEl = document.getElementById("blueScore");
-      const connectionStatusEl = document.getElementById("connectionStatus");
-
-      if (currentNumber) {
-        statusEl.textContent = `Player ${currentNumber} of ${totalPlayers} | Team: ${currentTeam ? currentTeam.toUpperCase() : 'N/A'}`;
-        playerInfoEl.textContent = `You are Player ${currentNumber} (${currentTeam ? currentTeam.toUpperCase() : 'N/A'} Team)`;
-      } else {
-        statusEl.textContent = "Connecting...";
-        playerInfoEl.textContent = "Waiting for assignment...";
-      }
-
-      redScoreEl.textContent = gameState.teamScores.red || 0;
-      blueScoreEl.textContent = gameState.teamScores.blue || 0;
-
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        connectionStatusEl.textContent = "Connected";
-        connectionStatusEl.className = "connection-status connected";
-      } else {
-        connectionStatusEl.textContent = "Disconnected";
-        connectionStatusEl.className = "connection-status disconnected";
-      }
     }
 
     // Update document title with scores and player count
@@ -267,23 +123,110 @@
       document.title = `Favipong - ${redScore}:${blueScore} (${totalPlayers} players)`;
     }
 
-    // Check for score changes and trigger flash
-    function checkScoreChange() {
-      const redScore = gameState.teamScores.red || 0;
-      const blueScore = gameState.teamScores.blue || 0;
+    // Check if ball is in player's area
+    function isBallInMyArea() {
+      if (!currentNumber || !totalPlayers) return false;
+      const faviconStartX = (currentNumber - 1) * CANVAS_WIDTH;
+      const faviconEndX = currentNumber * CANVAS_WIDTH;
+      return gameState.ballX >= faviconStartX && gameState.ballX < faviconEndX;
+    }
 
-      if (redScore !== previousRedScore || blueScore !== previousBlueScore) {
-        if (gameState.lastScoringTeam === currentTeam) {
-          scoreFlashFrames = SCORE_FLASH_DURATION;
-        } else if (gameState.lastScoringTeam) {
-          scoreFlashFrames = SCORE_FLASH_DURATION;
-        }
-        previousRedScore = redScore;
-        previousBlueScore = blueScore;
+    // Check if ball is near player's paddle edge
+    function isBallNearPaddleEdge() {
+      if (!currentNumber || !totalPlayers) return false;
+      
+      const faviconStartX = (currentNumber - 1) * CANVAS_WIDTH;
+      const faviconEndX = currentNumber * CANVAS_WIDTH;
+      const paddleY = gameState.paddlePositions[currentNumber] || CENTER_Y;
+      
+      // Player 1: left edge paddle
+      if (currentNumber === 1) {
+        const ballAtLeftEdge = gameState.ballX <= PADDLE_SIZE + 1;
+        const ballNearPaddleY = Math.abs(gameState.ballY - paddleY) <= PADDLE_SIZE + PADDLE_COLLISION_TOLERANCE;
+        return ballAtLeftEdge && ballNearPaddleY;
       }
+      // Last player: right edge paddle
+      else if (currentNumber === totalPlayers) {
+        const ballAtRightEdge = gameState.ballX >= faviconEndX - PADDLE_SIZE - 1;
+        const ballNearPaddleY = Math.abs(gameState.ballY - paddleY) <= PADDLE_SIZE + PADDLE_COLLISION_TOLERANCE;
+        return ballAtRightEdge && ballNearPaddleY;
+      }
+      // Middle players: top/bottom paddles
+      else {
+        const paddleX = (currentNumber - 1) * CANVAS_WIDTH + paddleY;
+        const ballAtTop = gameState.ballY <= PADDLE_SIZE + 1;
+        const ballAtBottom = gameState.ballY >= CANVAS_HEIGHT - PADDLE_SIZE - 1;
+        const ballNearPaddleX = Math.abs(gameState.ballX - paddleX) <= PADDLE_SIZE + PADDLE_COLLISION_TOLERANCE;
+        return (ballAtTop || ballAtBottom) && ballNearPaddleX;
+      }
+    }
+
+    // Check for hit/miss and trigger flash
+    function checkHitOrMiss() {
+      if (!currentNumber || !totalPlayers) {
+        ballWasInMyArea = false;
+        previousBallX = gameState.ballX;
+        previousBallY = gameState.ballY;
+        previousBallVelX = gameState.ballVelX;
+        previousBallVelY = gameState.ballVelY;
+        return;
+      }
+
+      const ballInMyArea = isBallInMyArea();
+      const ballNearEdge = isBallNearPaddleEdge();
+
+      // Ball just entered my area
+      if (ballInMyArea && !ballWasInMyArea) {
+        ballWasInMyArea = true;
+      }
+
+      // Check for velocity change (indicates a hit)
+      const velocityChangedX = previousBallVelX !== null && 
+        ((previousBallVelX > 0 && gameState.ballVelX < 0) || 
+         (previousBallVelX < 0 && gameState.ballVelX > 0));
+      const velocityChangedY = previousBallVelY !== null && 
+        ((previousBallVelY > 0 && gameState.ballVelY < 0) || 
+         (previousBallVelY < 0 && gameState.ballVelY > 0));
+      
+      // For edge players (1 and last), check X velocity
+      // For middle players, check Y velocity
+      const isEdgePlayer = currentNumber === 1 || currentNumber === totalPlayers;
+      const velocityChanged = isEdgePlayer ? velocityChangedX : velocityChangedY;
+      
+      // Check if ball was near paddle and velocity changed (hit)
+      if (ballNearEdge && velocityChanged) {
+        scoreFlashFrames = SCORE_FLASH_DURATION;
+        flashColor = 'green';
+      }
+      // Check if ball was near paddle but passed through without velocity change (miss)
+      else if (ballNearEdge && previousBallVelX !== null && !velocityChanged) {
+        // Ball was near paddle but didn't bounce - check if it should have been hit
+        const ballMovingAway = (currentNumber === 1 && gameState.ballVelX < 0) ||
+                               (currentNumber === totalPlayers && gameState.ballVelX > 0) ||
+                               (currentNumber > 1 && currentNumber < totalPlayers && 
+                                ((gameState.ballY <= 0 && gameState.ballVelY < 0) ||
+                                 (gameState.ballY >= CANVAS_HEIGHT && gameState.ballVelY > 0)));
+        if (ballMovingAway) {
+          scoreFlashFrames = SCORE_FLASH_DURATION;
+          flashColor = 'red';
+        }
+      }
+      // Ball left area without hitting paddle (miss)
+      else if (!ballInMyArea && ballWasInMyArea && !velocityChanged) {
+        scoreFlashFrames = SCORE_FLASH_DURATION;
+        flashColor = 'red';
+        ballWasInMyArea = false;
+      }
+
+      previousBallX = gameState.ballX;
+      previousBallY = gameState.ballY;
+      previousBallVelX = gameState.ballVelX;
+      previousBallVelY = gameState.ballVelY;
 
       if (scoreFlashFrames > 0) {
         scoreFlashFrames--;
+      } else {
+        flashColor = null;
       }
     }
 
@@ -295,18 +238,17 @@
         return;
       }
 
-      // Enable better rendering quality
-      ctx.imageSmoothingEnabled = false; // Pixelated look
+      // Enable pixelated rendering
+      ctx.imageSmoothingEnabled = false;
 
-      // Check for score changes
-      checkScoreChange();
+      // Check for hit/miss
+      checkHitOrMiss();
 
-      // Draw background with score flash effect
-      if (scoreFlashFrames > 0 && gameState.lastScoringTeam) {
-        const isOurTeam = gameState.lastScoringTeam === currentTeam;
-        const flashColor = isOurTeam ? SCORE_FLASH_GREEN : SCORE_FLASH_RED;
+      // Draw background with flash effect
+      if (scoreFlashFrames > 0 && flashColor) {
+        const flashColorHex = flashColor === 'green' ? SCORE_FLASH_GREEN : SCORE_FLASH_RED;
         const flashIntensity = scoreFlashFrames / SCORE_FLASH_DURATION;
-        ctx.fillStyle = flashColor;
+        ctx.fillStyle = flashColorHex;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = BACKGROUND_COLOR;
         ctx.globalAlpha = 1 - flashIntensity * 0.5;
@@ -322,11 +264,18 @@
       const faviconEndX = currentNumber * CANVAS_WIDTH;
       const worldWidth = CANVAS_WIDTH * totalPlayers;
       const maxWarningDistance = CANVAS_WIDTH * WARNING_DISTANCE_MULTIPLIER;
+      const ballInMyArea = gameState.ballX >= faviconStartX && gameState.ballX < faviconEndX;
 
       // Left warning line (ball coming from left)
+      // For player 1, show warning when ball is approaching from right (within their area)
+      // For other players, show warning when ball is approaching from left (outside their area)
       const leftEdgeX = faviconStartX;
       const distanceFromLeftEdge = gameState.ballX - leftEdgeX;
-      if (distanceFromLeftEdge >= -maxWarningDistance && distanceFromLeftEdge <= maxWarningDistance && gameState.ballVelX > 0) {
+      const showLeftWarning = currentNumber === 1 
+        ? (ballInMyArea && gameState.ballVelX < 0 && distanceFromLeftEdge <= maxWarningDistance)
+        : (distanceFromLeftEdge >= -maxWarningDistance && distanceFromLeftEdge <= maxWarningDistance && gameState.ballVelX > 0);
+      
+      if (showLeftWarning) {
         const distance = Math.abs(distanceFromLeftEdge);
         const intensity = Math.max(0, 1 - distance / maxWarningDistance);
         const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
@@ -339,9 +288,15 @@
       }
 
       // Right warning line (ball coming from right)
+      // For last player, show warning when ball is approaching from left (within their area)
+      // For other players, show warning when ball is approaching from right (outside their area)
       const rightEdgeX = faviconEndX;
       const distanceFromRightEdge = rightEdgeX - gameState.ballX;
-      if (distanceFromRightEdge >= -maxWarningDistance && distanceFromRightEdge <= maxWarningDistance && gameState.ballVelX < 0) {
+      const showRightWarning = currentNumber === totalPlayers
+        ? (ballInMyArea && gameState.ballVelX > 0 && distanceFromRightEdge <= maxWarningDistance)
+        : (distanceFromRightEdge >= -maxWarningDistance && distanceFromRightEdge <= maxWarningDistance && gameState.ballVelX < 0);
+      
+      if (showRightWarning) {
         const distance = Math.abs(distanceFromRightEdge);
         const intensity = Math.max(0, 1 - distance / maxWarningDistance);
         const lineHeight = Math.floor(CANVAS_HEIGHT * intensity);
@@ -407,7 +362,6 @@
     function updateGameDisplay() {
       renderGame(gameCanvas, gameCtx);
       updateFavicon();
-      updateUI();
       updateTitle();
     }
 
@@ -423,7 +377,6 @@
         ws.onopen = () => {
           console.log("Connected to WebSocket server");
           reconnectAttempts = 0;
-          updateUI();
         };
 
         ws.onmessage = (event) => {
@@ -440,7 +393,7 @@
             } else if (message.type === "gameState") {
               gameState.ballX = message.ballX || CENTER_X;
               gameState.ballY = message.ballY || CENTER_Y;
-              gameState.ballVelX = message.ballVelX || 0.25;
+              gameState.ballVelX = message.ballVelX || 0.15;
               gameState.paddlePositions = message.paddlePositions || {};
               gameState.teamScores = message.teamScores || { red: 0, blue: 0 };
               gameState.lastScoringTeam = message.lastScoringTeam || null;
@@ -454,14 +407,12 @@
 
         ws.onerror = (error) => {
           console.error("WebSocket error:", error);
-          updateUI();
         };
 
         ws.onclose = () => {
           console.log("WebSocket connection closed");
           ws = null;
           currentNumber = null;
-          updateUI();
 
           if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
             reconnectAttempts++;
@@ -614,4 +565,3 @@
   </script>
 </body>
 </html>
-
