@@ -115,12 +115,12 @@
       return playerNum % 2 === 1 ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
     }
 
-    // Update document title with scores and player count
+    // Update document title with scores
     function updateTitle() {
       if (!gameState.teamScores) return;
       const redScore = gameState.teamScores.red || 0;
       const blueScore = gameState.teamScores.blue || 0;
-      document.title = `Favipong - ${redScore}:${blueScore} (${totalPlayers} players)`;
+      document.title = `${redScore}:${blueScore}`;
     }
 
     // Check if ball is in player's area
@@ -173,14 +173,16 @@
       }
 
       const ballInMyArea = isBallInMyArea();
-      const ballNearEdge = isBallNearPaddleEdge();
+      const faviconStartX = (currentNumber - 1) * CANVAS_WIDTH;
+      const faviconEndX = currentNumber * CANVAS_WIDTH;
+      const worldWidth = CANVAS_WIDTH * totalPlayers;
 
       // Ball just entered my area
       if (ballInMyArea && !ballWasInMyArea) {
         ballWasInMyArea = true;
       }
 
-      // Check for velocity change (indicates a hit)
+      // Check for velocity change (indicates a collision)
       const velocityChangedX = previousBallVelX !== null && 
         ((previousBallVelX > 0 && gameState.ballVelX < 0) || 
          (previousBallVelX < 0 && gameState.ballVelX > 0));
@@ -188,34 +190,33 @@
         ((previousBallVelY > 0 && gameState.ballVelY < 0) || 
          (previousBallVelY < 0 && gameState.ballVelY > 0));
       
-      // For edge players (1 and last), check X velocity
-      // For middle players, check Y velocity
       const isEdgePlayer = currentNumber === 1 || currentNumber === totalPlayers;
-      const velocityChanged = isEdgePlayer ? velocityChangedX : velocityChangedY;
       
-      // Check if ball was near paddle and velocity changed (hit)
-      if (ballNearEdge && velocityChanged) {
-        scoreFlashFrames = SCORE_FLASH_DURATION;
-        flashColor = 'green';
-      }
-      // Check if ball was near paddle but passed through without velocity change (miss)
-      else if (ballNearEdge && previousBallVelX !== null && !velocityChanged) {
-        // Ball was near paddle but didn't bounce - check if it should have been hit
-        const ballMovingAway = (currentNumber === 1 && gameState.ballVelX < 0) ||
-                               (currentNumber === totalPlayers && gameState.ballVelX > 0) ||
-                               (currentNumber > 1 && currentNumber < totalPlayers && 
-                                ((gameState.ballY <= 0 && gameState.ballVelY < 0) ||
-                                 (gameState.ballY >= CANVAS_HEIGHT && gameState.ballVelY > 0)));
-        if (ballMovingAway) {
+      // For edge players (left/right paddles)
+      if (isEdgePlayer && velocityChangedX) {
+        // Check if ball hit the wall or the paddle
+        const hitLeftWall = currentNumber === 1 && gameState.ballX <= 0.5;
+        const hitRightWall = currentNumber === totalPlayers && gameState.ballX >= worldWidth - 0.5;
+        const ballNearPaddle = isBallNearPaddleEdge();
+        
+        if (hitLeftWall || hitRightWall) {
+          // Ball hit the wall - red flash (missed paddle)
           scoreFlashFrames = SCORE_FLASH_DURATION;
           flashColor = 'red';
+        } else if (ballNearPaddle) {
+          // Ball hit the paddle - green flash (hit paddle)
+          scoreFlashFrames = SCORE_FLASH_DURATION;
+          flashColor = 'green';
         }
       }
-      // Ball left area without hitting paddle (miss)
-      else if (!ballInMyArea && ballWasInMyArea && !velocityChanged) {
-        scoreFlashFrames = SCORE_FLASH_DURATION;
-        flashColor = 'red';
-        ballWasInMyArea = false;
+      // For middle players (top/bottom paddles)
+      else if (!isEdgePlayer && velocityChangedY) {
+        const ballNearPaddle = isBallNearPaddleEdge();
+        if (ballNearPaddle) {
+          // Ball hit the paddle - green flash
+          scoreFlashFrames = SCORE_FLASH_DURATION;
+          flashColor = 'green';
+        }
       }
 
       previousBallX = gameState.ballX;

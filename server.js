@@ -66,7 +66,9 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocket.Server({ server });
 
 const clients = new Map(); // Map<WebSocket, number>
+const clientTeams = new Map(); // Map<WebSocket, team>
 const paddlePositions = new Map(); // Map<number, position>
+let nextTeam = TEAM_RED; // Alternate teams for new connections
 
 // Team scores
 const teamScores = {
@@ -103,6 +105,21 @@ function getWorldWidth(totalPlayers) {
 
 // Reassign all clients to sequential numbers (1, 2, 3, ...)
 function reassignNumbers() {
+  // First, clean up any closed connections
+  const closedConnections = [];
+  clients.forEach((oldNumber, ws) => {
+    if (ws.readyState !== WebSocket.OPEN) {
+      closedConnections.push({ ws, playerNumber: oldNumber });
+    }
+  });
+  closedConnections.forEach(({ ws, playerNumber }) => {
+    clients.delete(ws);
+    clientTeams.delete(ws);
+    if (playerNumber) {
+      paddlePositions.delete(playerNumber);
+    }
+  });
+
   let newNumber = 1;
   const reassignments = new Map();
 
@@ -119,25 +136,30 @@ function reassignNumbers() {
     }
   });
 
+  const activeClientsCount = reassignments.size;
   reassignments.forEach((newNumber, ws) => {
     if (ws.readyState === WebSocket.OPEN) {
+      // Get persistent team for this connection
+      const team = clientTeams.get(ws) || TEAM_RED;
       ws.send(
         JSON.stringify({
           type: "assigned",
           number: newNumber,
-          totalPlayers: clients.size,
-          team: getTeam(newNumber),
+          totalPlayers: activeClientsCount,
+          team: team,
         })
       );
     }
   });
 
-  console.log(`Reassigned numbers. Total clients: ${clients.size}`);
+  console.log(`Reassigned numbers. Active clients: ${activeClientsCount}, Total in map: ${clients.size}`);
 }
 
-// Broadcast game state to all clients
+  // Broadcast game state to all clients
 function broadcastGameState() {
-  const totalPlayers = clients.size;
+  // Count only active (OPEN) connections
+  const activeClients = Array.from(clients.keys()).filter(ws => ws.readyState === WebSocket.OPEN);
+  const totalPlayers = activeClients.length;
   if (totalPlayers === 0) return;
 
   // Decrease score flash counter
@@ -158,7 +180,8 @@ function broadcastGameState() {
     lastScoringTeam: lastScoringTeam,
   });
 
-  clients.forEach((playerNumber, ws) => {
+  // Send to active clients only
+  activeClients.forEach(ws => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(message);
     }
@@ -175,7 +198,9 @@ function handlePaddleCollision(playerNumber) {
 
 // Game loop
 function gameLoop() {
-  const totalPlayers = clients.size;
+  // Count only active connections
+  const activeClients = Array.from(clients.keys()).filter(ws => ws.readyState === WebSocket.OPEN);
+  const totalPlayers = activeClients.length;
   if (totalPlayers < MIN_PLAYERS) {
     gameState.ballX = CENTER_X;
     gameState.ballY = CENTER_Y;
@@ -279,7 +304,25 @@ function gameLoop() {
 }
 
 wss.on("connection", (ws) => {
+  console.log(`New WebSocket connection. Current map size: ${clients.size}`);
+  
+  // Clean up any stale connections first (only keep OPEN connections)
+  const staleConnections = [];
+  clients.forEach((playerNumber, existingWs) => {
+    if (existingWs.readyState !== WebSocket.OPEN) {
+      staleConnections.push({ ws: existingWs, playerNumber });
+    }
+  });
+  staleConnections.forEach(({ ws: staleWs, playerNumber }) => {
+    console.log(`Removing stale connection (player ${playerNumber})`);
+    clients.delete(staleWs);
+    if (playerNumber) {
+      paddlePositions.delete(playerNumber);
+    }
+  });
+  
   clients.set(ws, 0);
+  console.log(`Added new connection. Map size: ${clients.size}`);
   reassignNumbers();
 
   ws.on("message", (data) => {
@@ -291,7 +334,9 @@ wss.on("connection", (ws) => {
         if (playerNumber && message.direction) {
           const currentPos = paddlePositions.get(playerNumber) || CENTER_Y;
           let newPos = currentPos;
-          const totalPlayers = clients.size;
+          // Count only active connections
+          const activeClients = Array.from(clients.keys()).filter(ws => ws.readyState === WebSocket.OPEN);
+          const totalPlayers = activeClients.length;
 
           // Player 1: left paddle (vertical)
           if (playerNumber === 1) {
@@ -328,12 +373,14 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     const playerNumber = clients.get(ws);
-    console.log(`Client ${playerNumber} disconnected. Total clients: ${clients.size}`);
+    console.log(`Client ${playerNumber} disconnected. Map size before cleanup: ${clients.size}`);
 
     if (playerNumber) {
       paddlePositions.delete(playerNumber);
     }
     clients.delete(ws);
+    clientTeams.delete(ws);
+    console.log(`After cleanup. Map size: ${clients.size}`);
     reassignNumbers();
   });
 
