@@ -81,9 +81,9 @@ let lastScoringTeam = null;
 let scoreFlashFrames = 0;
 const SCORE_FLASH_DURATION = 30; // frames
 
-// Get team for a player number (odd = red, even = blue)
-function getTeam(playerNumber) {
-  return playerNumber % 2 === 1 ? TEAM_RED : TEAM_BLUE;
+// Helper function to get active clients
+function getActiveClients() {
+  return Array.from(clients.keys()).filter(ws => ws.readyState === WebSocket.OPEN);
 }
 
 // Game state
@@ -103,13 +103,12 @@ function getWorldWidth(totalPlayers) {
   return FAVICON_WIDTH * totalPlayers;
 }
 
-// Reassign all clients to sequential numbers (1, 2, 3, ...)
-function reassignNumbers() {
-  // First, clean up any closed connections
+// Clean up closed connections
+function cleanupClosedConnections() {
   const closedConnections = [];
-  clients.forEach((oldNumber, ws) => {
+  clients.forEach((playerNumber, ws) => {
     if (ws.readyState !== WebSocket.OPEN) {
-      closedConnections.push({ ws, playerNumber: oldNumber });
+      closedConnections.push({ ws, playerNumber });
     }
   });
   closedConnections.forEach(({ ws, playerNumber }) => {
@@ -119,6 +118,11 @@ function reassignNumbers() {
       paddlePositions.delete(playerNumber);
     }
   });
+}
+
+// Reassign all clients to sequential numbers (1, 2, 3, ...)
+function reassignNumbers() {
+  cleanupClosedConnections();
 
   let newNumber = 1;
   const reassignments = new Map();
@@ -157,8 +161,7 @@ function reassignNumbers() {
 
   // Broadcast game state to all clients
 function broadcastGameState() {
-  // Count only active (OPEN) connections
-  const activeClients = Array.from(clients.keys()).filter(ws => ws.readyState === WebSocket.OPEN);
+  const activeClients = getActiveClients();
   const totalPlayers = activeClients.length;
   if (totalPlayers === 0) return;
 
@@ -191,16 +194,12 @@ function broadcastGameState() {
 // Handle paddle collision and scoring
 function handlePaddleCollision(playerNumber) {
   // Find the WebSocket for this player number to get their persistent team
-  let team = null;
-  clients.forEach((pNum, ws) => {
+  let team = TEAM_RED; // Default fallback
+  for (const [ws, pNum] of clients.entries()) {
     if (pNum === playerNumber && ws.readyState === WebSocket.OPEN) {
       team = clientTeams.get(ws) || TEAM_RED;
+      break;
     }
-  });
-  
-  if (!team) {
-    // Fallback to old method if team not found
-    team = getTeam(playerNumber);
   }
   
   teamScores[team]++;
@@ -210,8 +209,7 @@ function handlePaddleCollision(playerNumber) {
 
 // Game loop
 function gameLoop() {
-  // Count only active connections
-  const activeClients = Array.from(clients.keys()).filter(ws => ws.readyState === WebSocket.OPEN);
+  const activeClients = getActiveClients();
   const totalPlayers = activeClients.length;
   if (totalPlayers < MIN_PLAYERS) {
     gameState.ballX = CENTER_X;
@@ -244,10 +242,25 @@ function gameLoop() {
   // Ball collision with paddles
   let scoredThisFrame = false;
 
+  // Helper to check paddle collision
+  function checkPaddleCollision(playerNumber, paddleX, paddleY, isVertical) {
+    if (!paddlePositions.has(playerNumber)) return false;
+    
+    if (isVertical) {
+      // Vertical paddle (left/right edges)
+      const distanceY = Math.abs(gameState.ballY - paddleY);
+      return distanceY <= PADDLE_SIZE + PADDLE_COLLISION_TOLERANCE;
+    } else {
+      // Horizontal paddle (top/bottom)
+      const distanceX = Math.abs(gameState.ballX - paddleX);
+      return distanceX <= PADDLE_SIZE + PADDLE_COLLISION_TOLERANCE;
+    }
+  }
+
   // Left paddle (player 1)
-  if (gameState.ballX <= PADDLE_SIZE + 1 && gameState.ballVelX < 0 && paddlePositions.has(1)) {
+  if (gameState.ballX <= PADDLE_SIZE + 1 && gameState.ballVelX < 0) {
     const paddleY = paddlePositions.get(1);
-    if (Math.abs(gameState.ballY - paddleY) <= PADDLE_SIZE + PADDLE_COLLISION_TOLERANCE) {
+    if (paddleY !== undefined && checkPaddleCollision(1, 0, paddleY, true)) {
       gameState.ballVelX = Math.abs(gameState.ballVelX);
       gameState.ballX = PADDLE_SIZE + 1;
       if (!scoredThisFrame) {
@@ -260,9 +273,9 @@ function gameLoop() {
   // Right paddle (last player)
   const lastPlayer = totalPlayers;
   const rightPaddleX = worldWidth - PADDLE_SIZE - 1;
-  if (gameState.ballX >= rightPaddleX && gameState.ballVelX > 0 && paddlePositions.has(lastPlayer)) {
+  if (gameState.ballX >= rightPaddleX && gameState.ballVelX > 0) {
     const paddleY = paddlePositions.get(lastPlayer);
-    if (Math.abs(gameState.ballY - paddleY) <= PADDLE_SIZE + PADDLE_COLLISION_TOLERANCE) {
+    if (paddleY !== undefined && checkPaddleCollision(lastPlayer, rightPaddleX, paddleY, true)) {
       gameState.ballVelX = -Math.abs(gameState.ballVelX);
       gameState.ballX = rightPaddleX;
       if (!scoredThisFrame) {
@@ -274,15 +287,14 @@ function gameLoop() {
 
   // Top/bottom paddles (middle players)
   for (let i = 2; i < totalPlayers; i++) {
-    if (paddlePositions.has(i)) {
-      const paddleXInWorld = (i - 1) * FAVICON_WIDTH + (paddlePositions.get(i) || CENTER_Y);
+    const paddleY = paddlePositions.get(i);
+    if (paddleY === undefined) continue;
+    
+    const paddleXInWorld = (i - 1) * FAVICON_WIDTH + paddleY;
 
-      // Top paddle
-      if (
-        gameState.ballY <= PADDLE_SIZE + 1 &&
-        gameState.ballVelY < 0 &&
-        Math.abs(gameState.ballX - paddleXInWorld) <= PADDLE_SIZE + PADDLE_COLLISION_TOLERANCE
-      ) {
+    // Top paddle
+    if (gameState.ballY <= PADDLE_SIZE + 1 && gameState.ballVelY < 0) {
+      if (checkPaddleCollision(i, paddleXInWorld, 0, false)) {
         gameState.ballVelY = Math.abs(gameState.ballVelY);
         gameState.ballY = PADDLE_SIZE + 1;
         if (!scoredThisFrame) {
@@ -290,13 +302,11 @@ function gameLoop() {
           scoredThisFrame = true;
         }
       }
+    }
 
-      // Bottom paddle
-      if (
-        gameState.ballY >= FAVICON_HEIGHT - PADDLE_SIZE - 1 &&
-        gameState.ballVelY > 0 &&
-        Math.abs(gameState.ballX - paddleXInWorld) <= PADDLE_SIZE + PADDLE_COLLISION_TOLERANCE
-      ) {
+    // Bottom paddle
+    if (gameState.ballY >= FAVICON_HEIGHT - PADDLE_SIZE - 1 && gameState.ballVelY > 0) {
+      if (checkPaddleCollision(i, paddleXInWorld, FAVICON_HEIGHT - 1, false)) {
         gameState.ballVelY = -Math.abs(gameState.ballVelY);
         gameState.ballY = FAVICON_HEIGHT - PADDLE_SIZE - 1;
         if (!scoredThisFrame) {
@@ -318,26 +328,11 @@ function gameLoop() {
 wss.on("connection", (ws) => {
   console.log(`New WebSocket connection. Current map size: ${clients.size}`);
   
-  // Clean up any stale connections first (only keep OPEN connections)
-  const staleConnections = [];
-  clients.forEach((playerNumber, existingWs) => {
-    if (existingWs.readyState !== WebSocket.OPEN) {
-      staleConnections.push({ ws: existingWs, playerNumber });
-    }
-  });
-  staleConnections.forEach(({ ws: staleWs, playerNumber }) => {
-    console.log(`Removing stale connection (player ${playerNumber})`);
-    clients.delete(staleWs);
-    clientTeams.delete(staleWs);
-    if (playerNumber) {
-      paddlePositions.delete(playerNumber);
-    }
-  });
+  cleanupClosedConnections();
   
   // Assign a persistent team to this connection
   const assignedTeam = nextTeam;
   clientTeams.set(ws, assignedTeam);
-  // Alternate team for next connection
   nextTeam = nextTeam === TEAM_RED ? TEAM_BLUE : TEAM_RED;
   
   clients.set(ws, 0);
@@ -353,9 +348,7 @@ wss.on("connection", (ws) => {
         if (playerNumber && message.direction) {
           const currentPos = paddlePositions.get(playerNumber) || CENTER_Y;
           let newPos = currentPos;
-          // Count only active connections
-          const activeClients = Array.from(clients.keys()).filter(ws => ws.readyState === WebSocket.OPEN);
-          const totalPlayers = activeClients.length;
+          const totalPlayers = getActiveClients().length;
 
           // Player 1: left paddle (vertical)
           if (playerNumber === 1) {
@@ -390,29 +383,27 @@ wss.on("connection", (ws) => {
     }
   });
 
-  ws.on("close", () => {
+  // Helper to remove client and cleanup
+  function removeClient() {
     const playerNumber = clients.get(ws);
-    console.log(`Client ${playerNumber} disconnected. Map size before cleanup: ${clients.size}`);
-
     if (playerNumber) {
       paddlePositions.delete(playerNumber);
     }
     clients.delete(ws);
     clientTeams.delete(ws);
-    console.log(`After cleanup. Map size: ${clients.size}`);
     reassignNumbers();
+  }
+
+  ws.on("close", () => {
+    const playerNumber = clients.get(ws);
+    console.log(`Client ${playerNumber} disconnected. Map size: ${clients.size}`);
+    removeClient();
   });
 
   ws.on("error", (error) => {
     console.error(`Error with client:`, error);
     if (clients.has(ws)) {
-      const playerNumber = clients.get(ws);
-      if (playerNumber) {
-        paddlePositions.delete(playerNumber);
-      }
-      clients.delete(ws);
-      clientTeams.delete(ws);
-      reassignNumbers();
+      removeClient();
     }
   });
 });

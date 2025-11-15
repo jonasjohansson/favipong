@@ -57,10 +57,8 @@ let gameState = {
   lastScoringTeam: null,
 };
 
-// Score flash state
+// Score flash state (not used - flash is now based on hit/miss)
 let scoreFlashFrames = 0;
-let previousRedScore = 0;
-let previousBlueScore = 0;
 
 // Paddle movement keys
 const keys = {};
@@ -88,25 +86,9 @@ function updateTitle() {
   document.title = `${redScore}:${blueScore}`;
 }
 
-// Check for score changes and trigger flash
+// Score flash tracking (kept for compatibility but not actively used)
 function checkScoreChange() {
-  const redScore = gameState.teamScores.red || 0;
-  const blueScore = gameState.teamScores.blue || 0;
-
-  if (redScore !== previousRedScore || blueScore !== previousBlueScore) {
-    // Determine if our team scored or opponent scored
-    if (gameState.lastScoringTeam === currentTeam) {
-      // Our team scored - green flash
-      scoreFlashFrames = SCORE_FLASH_DURATION;
-    } else if (gameState.lastScoringTeam) {
-      // Opponent scored - red flash
-      scoreFlashFrames = SCORE_FLASH_DURATION;
-    }
-    previousRedScore = redScore;
-    previousBlueScore = blueScore;
-  }
-
-  // Decrease flash counter
+  // Flash logic is now handled by hit/miss detection
   if (scoreFlashFrames > 0) {
     scoreFlashFrames--;
   }
