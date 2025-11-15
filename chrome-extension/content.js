@@ -65,20 +65,27 @@ let previousBlueScore = 0;
 // Paddle movement keys
 const keys = {};
 
-// Get team color for a player number
+// Get team color for current player
 function getTeamColor(playerNum) {
+  // Use persistent team if available, otherwise fallback to number-based
+  if (currentTeam === "red") {
+    return TEAM_RED_COLOR;
+  } else if (currentTeam === "blue") {
+    return TEAM_BLUE_COLOR;
+  }
+  // Fallback
   return playerNum % 2 === 1 ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
 }
 
-// Update document title with scores and player count
+// Update document title with scores
 function updateTitle() {
   if (!gameState.teamScores) return;
 
   const redScore = gameState.teamScores.red || 0;
   const blueScore = gameState.teamScores.blue || 0;
 
-  // Minimal format: "R:B P" (Red:Blue Players)
-  document.title = `${redScore}:${blueScore} ${totalPlayers}`;
+  // Just show score
+  document.title = `${redScore}:${blueScore}`;
 }
 
 // Check for score changes and trigger flash

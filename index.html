@@ -110,8 +110,15 @@
     const gameCanvas = document.getElementById("gameCanvas");
     const gameCtx = gameCanvas.getContext("2d");
 
-    // Get team color for a player number
+    // Get team color for current player
     function getTeamColor(playerNum) {
+      // Use persistent team if available, otherwise fallback to number-based
+      if (currentTeam === "red") {
+        return TEAM_RED_COLOR;
+      } else if (currentTeam === "blue") {
+        return TEAM_BLUE_COLOR;
+      }
+      // Fallback
       return playerNum % 2 === 1 ? TEAM_RED_COLOR : TEAM_BLUE_COLOR;
     }
 
