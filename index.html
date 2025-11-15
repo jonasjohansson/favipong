@@ -6,6 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0" />
     <title>Favipong</title>
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
     <style>
       * {
         margin: 0;
@@ -90,6 +91,46 @@
       // Warning line settings
       const WARNING_DISTANCE_MULTIPLIER = 2; // Show warning within 2 favicons
       // ===================================
+
+      // Sound initialization
+      let pongSynth = null;
+      let soundInitialized = false;
+
+      async function initSound() {
+        if (soundInitialized) return;
+        try {
+          await Tone.start();
+          // Create a pong sound: short beep with a quick attack and decay
+          pongSynth = new Tone.Synth({
+            oscillator: {
+              type: "square",
+            },
+            envelope: {
+              attack: 0.01,
+              decay: 0.1,
+              sustain: 0,
+              release: 0.1,
+            },
+          }).toDestination();
+          soundInitialized = true;
+        } catch (error) {
+          console.warn("Could not initialize sound:", error);
+        }
+      }
+
+      function playPongSound() {
+        if (!soundInitialized || !pongSynth) return;
+        try {
+          // Play a pong sound at 440Hz (A4) for 0.1 seconds
+          pongSynth.triggerAttackRelease("A4", "8n");
+        } catch (error) {
+          console.warn("Could not play sound:", error);
+        }
+      }
+
+      // Initialize sound on user interaction
+      document.addEventListener("click", initSound, { once: true });
+      document.addEventListener("keydown", initSound, { once: true });
 
       // Game state
       let currentNumber = null;
@@ -257,6 +298,7 @@
               // This happens when ball bounces off paddle (ballX = 1)
               scoreFlashFrames = SCORE_FLASH_DURATION;
               flashColor = "green";
+              playPongSound();
             }
           }
           // Last player: Check if ball hit right wall (missed paddle)
@@ -277,6 +319,7 @@
               // Only if ball is NOT at the wall position
               scoreFlashFrames = SCORE_FLASH_DURATION;
               flashColor = "green";
+              playPongSound();
             }
           }
         }
@@ -287,6 +330,7 @@
             // Ball hit the paddle - green flash
             scoreFlashFrames = SCORE_FLASH_DURATION;
             flashColor = "green";
+            playPongSound();
           }
         }
 
