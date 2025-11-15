@@ -1,0 +1,16 @@
+{
+  "name": "favicon-websocket-game",
+  "version": "1.0.0",
+  "description": "WebSocket game running in favicon",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
+
