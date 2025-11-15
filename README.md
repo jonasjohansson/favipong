@@ -19,7 +19,7 @@ A WebSocket-based multiplayer Pong game that runs in the browser favicon! Player
    - Open Chrome and navigate to `chrome://extensions/`
    - Enable "Developer mode" (toggle in top right)
    - Click "Load unpacked"
-   - Select the root folder of this project (the folder containing `manifest.json`)
+   - Select the `chrome-extension` folder in this project
 
 4. **Test it:**
    - **Option A - Web Interface**: Visit `http://localhost:8080` in your browser to play with a full-size game display
@@ -27,10 +27,11 @@ A WebSocket-based multiplayer Pong game that runs in the browser favicon! Player
      - Open Chrome and navigate to `chrome://extensions/`
      - Enable "Developer mode" (toggle in top right)
      - Click "Load unpacked"
-     - Select the root folder of this project (the folder containing `manifest.json`)
+     - Select the `chrome-extension` folder in this project
      - Open multiple browser windows/tabs
      - Each window will connect to the server and receive a unique number
      - Watch the favicon update with the game!
+   - **Option C - Safari Extension**: See `safari-extension/README.md` for installation instructions
 
 ## Deployment to Render.com
 
@@ -76,8 +77,10 @@ The extension is pre-configured to use the production server at `wss://favipong.
 
 - **Server (`server.js`)**: WebSocket server that manages game state, tracks players, handles collisions, and scores. Also serves `index.html` at the root URL.
 - **Web Interface (`index.html`)**: Standalone HTML page that connects to the WebSocket server, displays the game full-size in the browser, and updates the favicon
-- **Extension Background Script (`background.js`)**: Handles messages between content scripts and extension
-- **Extension Content Script (`content.js`)**: Connects to WebSocket, renders game in favicon, handles keyboard controls
+- **Chrome Extension (`chrome-extension/`)**: Chrome browser extension that displays the game in favicons
+- **Safari Extension (`safari-extension/`)**: Safari browser extension that displays the game in favicons
+- **Extension Background Scripts**: Handle messages between content scripts and extension
+- **Extension Content Scripts**: Connect to WebSocket, render game in favicon, handle keyboard controls
 - **Favicon**: A 16x16 canvas that displays your slice of the game world
 
 ## Game Features
@@ -95,12 +98,16 @@ The extension is pre-configured to use the production server at `wss://favipong.
 ├── server.js              # WebSocket server
 ├── index.html             # Web interface (full-size game display)
 ├── package.json           # Node.js dependencies
-├── manifest.json          # Extension manifest
-├── background.js          # Service worker for WebSocket
-├── content.js             # Content script for favicon updates
-├── popup.html             # Extension popup UI
-├── popup.js               # Popup script
-├── test.html              # Test page
+├── chrome-extension/      # Chrome extension files
+│   ├── manifest.json       # Extension manifest
+│   ├── background.js      # Service worker for WebSocket
+│   ├── content.js         # Content script for favicon updates
+│   └── README.md          # Chrome extension instructions
+├── safari-extension/      # Safari extension files
+│   ├── manifest.json      # Extension manifest
+│   ├── background.js      # Service worker for WebSocket
+│   ├── content.js         # Content script for favicon updates
+│   └── README.md          # Safari extension instructions
 └── README.md              # This file
 ```
 

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Favicon WebSocket Game",
+  "version": "1.0.0",
+  "description": "WebSocket game that runs in the favicon",
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*", "https://*.onrender.com/*", "wss://*.onrender.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
+
