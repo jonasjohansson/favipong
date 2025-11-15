@@ -328,13 +328,20 @@ wss.on("connection", (ws) => {
   staleConnections.forEach(({ ws: staleWs, playerNumber }) => {
     console.log(`Removing stale connection (player ${playerNumber})`);
     clients.delete(staleWs);
+    clientTeams.delete(staleWs);
     if (playerNumber) {
       paddlePositions.delete(playerNumber);
     }
   });
   
+  // Assign a persistent team to this connection
+  const assignedTeam = nextTeam;
+  clientTeams.set(ws, assignedTeam);
+  // Alternate team for next connection
+  nextTeam = nextTeam === TEAM_RED ? TEAM_BLUE : TEAM_RED;
+  
   clients.set(ws, 0);
-  console.log(`Added new connection. Map size: ${clients.size}`);
+  console.log(`Added new connection with team ${assignedTeam}. Map size: ${clients.size}`);
   reassignNumbers();
 
   ws.on("message", (data) => {

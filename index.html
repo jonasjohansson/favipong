@@ -374,8 +374,16 @@
     }
 
     function connectWebSocket() {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        return;
+      // Prevent multiple connection attempts
+      if (ws) {
+        if (ws.readyState === WebSocket.OPEN) {
+          return; // Already connected
+        }
+        if (ws.readyState === WebSocket.CONNECTING) {
+          return; // Already connecting
+        }
+        // Close any existing connection that's not open or connecting
+        ws.close();
       }
 
       try {
@@ -555,11 +563,19 @@
       }
     }
 
-    // Connect when page loads
+    // Connect when page loads (only once)
+    let connectionInitiated = false;
+    function initConnection() {
+      if (!connectionInitiated) {
+        connectionInitiated = true;
+        connectWebSocket();
+      }
+    }
+    
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", connectWebSocket);
+      document.addEventListener("DOMContentLoaded", initConnection);
     } else {
-      connectWebSocket();
+      initConnection();
     }
 
     // Reconnect on page visibility change
