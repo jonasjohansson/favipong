@@ -22,9 +22,15 @@ A WebSocket-based multiplayer Pong game that runs in the browser favicon! Player
    - Select the root folder of this project (the folder containing `manifest.json`)
 
 4. **Test it:**
-   - Open multiple browser windows/tabs
-   - Each window will connect to the server and receive a unique number
-   - Watch the favicon update with the game!
+   - **Option A - Web Interface**: Visit `http://localhost:8080` in your browser to play with a full-size game display
+   - **Option B - Chrome Extension**: 
+     - Open Chrome and navigate to `chrome://extensions/`
+     - Enable "Developer mode" (toggle in top right)
+     - Click "Load unpacked"
+     - Select the root folder of this project (the folder containing `manifest.json`)
+     - Open multiple browser windows/tabs
+     - Each window will connect to the server and receive a unique number
+     - Watch the favicon update with the game!
 
 ## Deployment to Render.com
 
@@ -50,6 +56,7 @@ A WebSocket-based multiplayer Pong game that runs in the browser favicon! Player
    - Render will automatically build and deploy your server
    - Service URL: `https://favipong.onrender.com`
    - WebSocket URL: `wss://favipong.onrender.com`
+   - **Web Interface**: Visit `https://favipong.onrender.com` to play with a full-size game display
 
 ### Extension Configuration
 
@@ -67,7 +74,8 @@ The extension is pre-configured to use the production server at `wss://favipong.
 
 ## How it works
 
-- **Server (`server.js`)**: WebSocket server that manages game state, tracks players, handles collisions, and scores
+- **Server (`server.js`)**: WebSocket server that manages game state, tracks players, handles collisions, and scores. Also serves `index.html` at the root URL.
+- **Web Interface (`index.html`)**: Standalone HTML page that connects to the WebSocket server, displays the game full-size in the browser, and updates the favicon
 - **Extension Background Script (`background.js`)**: Handles messages between content scripts and extension
 - **Extension Content Script (`content.js`)**: Connects to WebSocket, renders game in favicon, handles keyboard controls
 - **Favicon**: A 16x16 canvas that displays your slice of the game world
@@ -85,6 +93,7 @@ The extension is pre-configured to use the production server at `wss://favipong.
 ```
 .
 ├── server.js              # WebSocket server
+├── index.html             # Web interface (full-size game display)
 ├── package.json           # Node.js dependencies
 ├── manifest.json          # Extension manifest
 ├── background.js          # Service worker for WebSocket
@@ -100,6 +109,9 @@ The extension is pre-configured to use the production server at `wss://favipong.
 - Real-time WebSocket connection
 - Automatic reconnection on disconnect
 - Dynamic favicon updates using canvas
+- Full-size game display in web browser (via `index.html`)
 - Multiple browser window support
 - Sequential number assignment (1, 2, 3, ...)
+- Team-based gameplay (red vs blue)
+- Score tracking and visual feedback
 

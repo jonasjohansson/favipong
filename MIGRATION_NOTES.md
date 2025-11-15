@@ -25,7 +25,7 @@ All files are portable and use relative paths. No hardcoded local paths detected
 ### Server (server.js)
 - ✅ Uses `process.env.PORT` (works on Render.com)
 - ✅ No hardcoded paths
-- ✅ Health check endpoint at `/health`
+- ✅ Health check endpoint at `/healthz`
 
 ### Extension (content.js)
 - ✅ WebSocket URL configurable via localStorage
@@ -41,7 +41,7 @@ All files are portable and use relative paths. No hardcoded local paths detected
 1. ✅ Push to GitHub repository
 2. ✅ Connect to Render.com
 3. ✅ Deploy service (will auto-detect Node.js)
-4. ✅ Verify health check: `https://favipong.onrender.com/health`
+4. ✅ Verify health check: `https://favipong.onrender.com/healthz`
 5. ✅ Test extension connection to production server
 
 ## Notes for Future Reference

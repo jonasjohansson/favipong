@@ -12,7 +12,7 @@
 2. **Build Command**: `npm install`
 3. **Start Command**: `npm start`
 4. **Environment**: Node.js
-5. **Health Check**: `/health` endpoint
+5. **Health Check**: `/healthz` endpoint
 
 ## Extension Configuration
 
